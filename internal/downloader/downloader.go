@@ -3,6 +3,7 @@ package downloader
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -53,18 +54,20 @@ func (s *Service) Run(ctx context.Context) <-chan Event {
 			return
 		}
 
+		tasks := buildTasks(videos, mode)
+		totalTasks := len(tasks)
 		events <- Event{
 			Type:        EventPlaylistReady,
 			Timestamp:   time.Now(),
 			ChannelURL:  s.options.TargetURL,
 			RequestURL:  s.options.TargetURL,
 			Mode:        mode,
-			Videos:      videos,
-			TotalVideos: len(videos),
+			Videos:      tasks,
+			TotalVideos: totalTasks,
 		}
 
 		completed := 0
-		for i, video := range videos {
+		for i, task := range tasks {
 			select {
 			case <-ctx.Done():
 				events <- Event{
@@ -80,18 +83,21 @@ func (s *Service) Run(ctx context.Context) <-chan Event {
 			events <- Event{
 				Type:        EventVideoStart,
 				Timestamp:   time.Now(),
-				Video:       video,
+				Video:       task,
+				ActiveMode:  resolveTaskMode(task, mode),
 				VideoIndex:  i,
-				TotalVideos: len(videos),
+				TotalVideos: totalTasks,
 			}
 
-			progressCh, errCh := s.client.downloadMedia(ctx, video, s.options.OutputDir, mode)
+			activeMode := resolveTaskMode(task, mode)
+			progressCh, errCh := s.client.downloadMedia(ctx, task, s.options.OutputDir, activeMode)
 			for upd := range progressCh {
 				if upd.LogLine != "" {
 					events <- Event{
 						Type:       EventLog,
 						Timestamp:  time.Now(),
-						Video:      video,
+						Video:      task,
+						ActiveMode: activeMode,
 						VideoIndex: i,
 						Message:    upd.LogLine,
 					}
@@ -101,9 +107,10 @@ func (s *Service) Run(ctx context.Context) <-chan Event {
 					Type:            EventVideoProgress,
 					Timestamp:       time.Now(),
 					Mode:            mode,
-					Video:           video,
+					Video:           task,
+					ActiveMode:      activeMode,
 					VideoIndex:      i,
-					TotalVideos:     len(videos),
+					TotalVideos:     totalTasks,
 					DownloadedBytes: upd.DownloadedBytes,
 					TotalBytes:      upd.TotalBytes,
 					Percent:         upd.Percent,
@@ -116,10 +123,11 @@ func (s *Service) Run(ctx context.Context) <-chan Event {
 				events <- Event{
 					Type:       EventVideoError,
 					Timestamp:  time.Now(),
-					Video:      video,
+					Video:      task,
+					ActiveMode: activeMode,
 					VideoIndex: i,
 					Err:        downloadErr,
-					Message:    fmt.Sprintf("failed video %d/%d (%s): %v", i+1, len(videos), video.Title, downloadErr),
+					Message:    fmt.Sprintf("failed item %d/%d (%s %s): %v", i+1, totalTasks, task.Title, activeMode, downloadErr),
 				}
 				continue
 			}
@@ -129,10 +137,11 @@ func (s *Service) Run(ctx context.Context) <-chan Event {
 				Type:        EventVideoDone,
 				Timestamp:   time.Now(),
 				Mode:        mode,
-				Video:       video,
+				Video:       task,
+				ActiveMode:  activeMode,
 				VideoIndex:  i,
-				TotalVideos: len(videos),
-				Message:     video.Title,
+				TotalVideos: totalTasks,
+				Message:     task.Title,
 			}
 		}
 
@@ -140,7 +149,7 @@ func (s *Service) Run(ctx context.Context) <-chan Event {
 			Type:        EventFinished,
 			Timestamp:   time.Now(),
 			Mode:        mode,
-			TotalVideos: len(videos),
+			TotalVideos: totalTasks,
 			VideoIndex:  completed,
 		}
 	}()
@@ -150,9 +159,41 @@ func (s *Service) Run(ctx context.Context) <-chan Event {
 
 func normalizeMode(mode DownloadMode) DownloadMode {
 	switch mode {
+	case ModeBoth:
+		return ModeBoth
 	case ModeVideo:
 		return ModeVideo
 	default:
 		return ModeAudio
 	}
+}
+
+func buildTasks(videos []Video, mode DownloadMode) []Video {
+	if mode != ModeBoth {
+		return videos
+	}
+	tasks := make([]Video, 0, len(videos)*2)
+	for _, video := range videos {
+		audioTask := video
+		audioTask.Title = video.Title + " [audio]"
+		tasks = append(tasks, audioTask)
+		videoTask := video
+		videoTask.Title = video.Title + " [video]"
+		tasks = append(tasks, videoTask)
+	}
+	return tasks
+}
+
+func resolveTaskMode(video Video, selected DownloadMode) DownloadMode {
+	title := strings.ToLower(video.Title)
+	if strings.HasSuffix(title, "[video]") {
+		return ModeVideo
+	}
+	if strings.HasSuffix(title, "[audio]") {
+		return ModeAudio
+	}
+	if selected == ModeBoth {
+		return ModeAudio
+	}
+	return selected
 }

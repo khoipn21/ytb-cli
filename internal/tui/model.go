@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"youtube-channel-audio-downloader/internal/downloader"
@@ -54,6 +55,7 @@ type Model struct {
 	events       <-chan downloader.Event
 	request      downloader.Options
 	videos       []videoState
+	table        table.Model
 	totalVideos  int
 	currentIndex int
 	completed    int
@@ -65,8 +67,11 @@ func NewModel(config Config) Model {
 	outputInput := newInput("Output directory", config.InitialOutput, "./downloads")
 	ytDLPInput := newInput("yt-dlp executable", config.InitialYTDLP, "yt-dlp")
 	modeIndex := 0
-	if strings.EqualFold(strings.TrimSpace(config.InitialMode), string(downloader.ModeVideo)) {
+	initialMode := strings.ToLower(strings.TrimSpace(config.InitialMode))
+	if initialMode == string(downloader.ModeVideo) {
 		modeIndex = 1
+	} else if initialMode == string(downloader.ModeBoth) {
+		modeIndex = 2
 	}
 	m := Model{
 		screen:       screenSetup,
@@ -90,6 +95,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.setupHelpTxt = renderMarkdown(m.setupHelpMD)
+		if m.screen == screenDownload {
+			m.updateTableDimensions()
+			var cmd tea.Cmd
+			m.table, cmd = m.table.Update(msg)
+			return m, cmd
+		}
 		return m, nil
 	case startDownloadMsg:
 		if msg.err != nil {

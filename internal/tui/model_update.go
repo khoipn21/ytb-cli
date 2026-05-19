@@ -24,7 +24,7 @@ func (m Model) updateSetup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "left", "right":
 		if m.focusIndex == 0 {
-			m.modeIndex = 1 - m.modeIndex
+			m.modeIndex = (m.modeIndex + 1) % 3
 			return m, nil
 		}
 	case "enter":
@@ -70,7 +70,9 @@ func (m Model) updateDownload(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		})
 		return m, nil
 	}
-	return m, nil
+	var cmd tea.Cmd
+	m.table, cmd = m.table.Update(msg)
+	return m, cmd
 }
 
 func (m Model) startDownloadFlow() (tea.Model, tea.Cmd) {
@@ -88,6 +90,8 @@ func (m Model) startDownloadFlow() (tea.Model, tea.Cmd) {
 	mode := downloader.ModeAudio
 	if m.modeIndex == 1 {
 		mode = downloader.ModeVideo
+	} else if m.modeIndex == 2 {
+		mode = downloader.ModeBoth
 	}
 	m.request = downloader.Options{
 		TargetURL: targetURL,

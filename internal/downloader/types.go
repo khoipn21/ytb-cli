@@ -13,6 +13,7 @@ type DownloadMode string
 const (
 	ModeAudio DownloadMode = "audio"
 	ModeVideo DownloadMode = "video"
+	ModeBoth  DownloadMode = "both"
 )
 
 type EventType string
@@ -35,6 +36,7 @@ type Event struct {
 	Mode            DownloadMode
 	Videos          []Video
 	Video           Video
+	ActiveMode      DownloadMode
 	VideoIndex      int
 	TotalVideos     int
 	DownloadedBytes int64

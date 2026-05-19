@@ -19,22 +19,24 @@ go run .
 Flags:
 
 - `-url`: Prefill the URL field (channel or single video URL)
-- `-mode`: Prefill mode (`audio` or `video`)
+- `-mode`: Prefill mode (`audio`, `video`, or `both`)
 - `-output`: Download output directory (default `./downloads`)
 - `-yt-dlp-bin`: yt-dlp executable path (default `yt-dlp`)
 
 ## Behavior
 
 - Setup screen:
-  - select mode: audio/video
+  - select mode: audio/video/both
   - enter channel or single video URL
   - set output directory
 - Download screen:
   - overall progress bar
-  - per-video progress rows
+  - terminal-fit table (resizes with window)
+  - per-item rows (`both` mode expands each source into audio+video tasks)
   - speed and ETA when available
 - Audio mode outputs MP3.
 - Video mode outputs MP4 (merged best video/audio).
+- Both mode outputs MP3 and MP4.
 
 Controls:
 - `Tab` / `Shift+Tab`: move focus in setup

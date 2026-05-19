@@ -19,8 +19,12 @@ func (m *Model) applyEvent(event downloader.Event) {
 		for i, v := range event.Videos {
 			m.videos[i] = videoState{video: v}
 		}
+		m.initDownloadTable()
 	case downloader.EventVideoStart:
 		m.currentIndex = event.VideoIndex
+		if event.VideoIndex >= 0 {
+			m.table.SetCursor(event.VideoIndex)
+		}
 	case downloader.EventVideoProgress:
 		if event.VideoIndex < 0 || event.VideoIndex >= len(m.videos) {
 			return
@@ -30,6 +34,7 @@ func (m *Model) applyEvent(event downloader.Event) {
 		item.eta = event.ETA
 		item.percent = clamp(event.Percent)
 		m.recomputeOverall()
+		m.refreshTableRows()
 	case downloader.EventVideoDone:
 		if event.VideoIndex >= 0 && event.VideoIndex < len(m.videos) {
 			item := &m.videos[event.VideoIndex]
@@ -40,6 +45,7 @@ func (m *Model) applyEvent(event downloader.Event) {
 		}
 		m.completed++
 		m.recomputeOverall()
+		m.refreshTableRows()
 	case downloader.EventVideoError:
 		if event.VideoIndex >= 0 && event.VideoIndex < len(m.videos) {
 			item := &m.videos[event.VideoIndex]
@@ -47,11 +53,13 @@ func (m *Model) applyEvent(event downloader.Event) {
 			item.errorText = event.Message
 		}
 		m.errText = event.Message
+		m.refreshTableRows()
 	case downloader.EventLog:
 		m.lastLog = strings.TrimSpace(event.Message)
 	case downloader.EventFinished:
 		m.overall = 1
 		m.lastLog = fmt.Sprintf("Finished: %d/%d completed", m.completed, m.totalVideos)
+		m.refreshTableRows()
 	}
 }
 
@@ -96,14 +104,14 @@ func setupMarkdown() string {
 	return `
 # YouTube Downloader Setup
 
-- Select **mode**: audio (mp3) or video (mp4)
+- Select **mode**: audio, video, or both
 - Paste a **channel URL** or **single video URL**
 - Choose output directory, then press **Enter** on Start
 
 ## Keys
 
 - Tab / Shift+Tab: move between controls
-- Left / Right: toggle mode
+- Left / Right: cycle mode
 - Enter: continue
 - q: quit
 `

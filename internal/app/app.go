@@ -15,7 +15,7 @@ func Run(args []string) error {
 	flags.SetOutput(os.Stdout)
 
 	targetURL := flags.String("url", "", "YouTube channel or single video URL")
-	mode := flags.String("mode", "audio", "Download mode: audio or video")
+	mode := flags.String("mode", "audio", "Download mode: audio, video, or both")
 	output := flags.String("output", "./downloads", "Output directory")
 	ytDLPBin := flags.String("yt-dlp-bin", "yt-dlp", "Path to yt-dlp executable")
 	showHelp := flags.Bool("help", false, "Show help")
