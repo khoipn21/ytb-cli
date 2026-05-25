@@ -11,13 +11,6 @@ import (
 	"youtube-channel-audio-downloader/internal/downloader"
 )
 
-type screen string
-
-const (
-	screenSetup    screen = "setup"
-	screenDownload screen = "download"
-)
-
 type videoState struct {
 	video     downloader.Video
 	percent   float64
@@ -29,45 +22,58 @@ type videoState struct {
 }
 
 type eventMsg struct {
-	event downloader.Event
-	ok    bool
+	event  downloader.Event
+	events <-chan downloader.Event
+	runID  int
+	ok     bool
 }
 
 type startDownloadMsg struct {
 	events  <-chan downloader.Event
 	cancel  context.CancelFunc
 	options downloader.Options
+	runID   int
 	err     error
 }
 
 type Model struct {
-	screen       screen
-	width        int
-	height       int
-	focusIndex   int
-	modeIndex    int
-	errText      string
-	lastLog      string
-	setupHelpMD  string
-	setupHelpTxt string
-	urlInput     textinput.Model
-	outputInput  textinput.Model
-	addInput     textinput.Model
-	cancel       context.CancelFunc
-	events       <-chan downloader.Event
-	request      downloader.Options
-	pending      []downloader.Options
-	videos       []videoState
-	table        table.Model
-	tableCompact bool
-	addingURL    bool
-	addModeIndex int
-	running      bool
-	batchStart   int
-	totalVideos  int
-	currentIndex int
-	completed    int
-	overall      float64
+	screen          screen
+	width           int
+	height          int
+	focusIndex      int
+	modeIndex       int
+	errText         string
+	lastLog         string
+	setupHelpMD     string
+	setupHelpTxt    string
+	urlInput        textinput.Model
+	outputInput     textinput.Model
+	addInput        textinput.Model
+	cancel          context.CancelFunc
+	events          <-chan downloader.Event
+	request         downloader.Options
+	pending         []downloader.Options
+	videos          []videoState
+	table           table.Model
+	tableCompact    bool
+	showHelp        bool
+	activePanel     downloadPanel
+	filterIndex     int
+	visibleRows     []int
+	detailOpen      bool
+	detailIndex     int
+	addingURL       bool
+	addModeIndex    int
+	running         bool
+	batchStart      int
+	totalVideos     int
+	currentIndex    int
+	completed       int
+	overall         float64
+	setupIntroFrame int
+	setupIdleFrame  int
+	setupTickGen    int
+	runID           int
 }
 
 func NewModel(config Config) Model {
@@ -87,8 +93,10 @@ func NewModel(config Config) Model {
 		urlInput:     urlInput,
 		outputInput:  outputInput,
 		addInput:     addInput,
+		detailIndex:  -1,
 		currentIndex: -1,
 		setupHelpMD:  setupMarkdown(),
+		setupTickGen: 1,
 	}
 	m.focusCurrentField()
 	m.setupHelpTxt = renderMarkdown(m.setupHelpMD, 52)
@@ -96,10 +104,20 @@ func NewModel(config Config) Model {
 	return m
 }
 
-func (m Model) Init() tea.Cmd { return nil }
+func (m Model) Init() tea.Cmd { return setupAnimationTick(m.setupTickGen) }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case setupAnimationTickMsg:
+		if m.screen != screenSetup || msg.generation != m.setupTickGen {
+			return m, nil
+		}
+		if m.setupIntroFrame < setupIntroFrameCount {
+			m.setupIntroFrame++
+		} else {
+			m.setupIdleFrame++
+		}
+		return m, setupAnimationTick(m.setupTickGen)
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -112,6 +130,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case startDownloadMsg:
+		if msg.runID != m.runID {
+			return m, nil
+		}
 		if msg.err != nil {
 			m.errText = msg.err.Error()
 			return m, nil
@@ -122,15 +143,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen = screenDownload
 		m.running = true
 		m.errText = ""
-		return m, waitForEvent(m.events)
+		return m, waitForEvent(m.events, m.runID)
 	case eventMsg:
+		if m.screen != screenDownload || msg.runID != m.runID || msg.events != m.events {
+			return m, nil
+		}
 		if !msg.ok {
 			m.running = false
 			if len(m.pending) > 0 {
 				next := m.pending[0]
 				m.pending = m.pending[1:]
 				m.lastLog = fmt.Sprintf("Starting queued target: %s", short(next.TargetURL, 80))
-				return m, startDownloadCmd(next)
+				m.runID++
+				return m, startDownloadCmd(next, m.runID)
 			}
 			return m, nil
 		}
@@ -141,10 +166,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				next := m.pending[0]
 				m.pending = m.pending[1:]
 				m.lastLog = fmt.Sprintf("Starting queued target: %s", short(next.TargetURL, 80))
-				return m, startDownloadCmd(next)
+				m.runID++
+				return m, startDownloadCmd(next, m.runID)
 			}
 		}
-		return m, waitForEvent(m.events)
+		return m, waitForEvent(m.events, m.runID)
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
 			if m.cancel != nil {

@@ -2,11 +2,12 @@
 
 Interactive terminal app for downloading YouTube media from:
 - a channel URL (all uploads)
+- a playlist URL
 - a single video URL
 
 ## Overview
 
-This project is a pure Go downloader with an interactive Bubble Tea TUI. It supports audio, video, and combined download modes, live progress reporting, and queueing additional URLs while a session is running.
+This project is a pure Go downloader with an interactive Bubble Tea TUI. It supports audio, video, and combined download modes, live progress reporting, status filtering, per-item details, and queueing additional URLs while a session is running.
 
 ## Requirements
 
@@ -43,13 +44,17 @@ go run . -url "https://www.youtube.com/@SomeChannel/videos" -mode both -output "
 
 1. Setup screen
 - select mode (`audio` / `video` / `both`)
-- enter a channel or video URL
+- enter a channel, playlist, or video URL
+- see the detected link type before starting
 - choose output directory
 - start download
+- the setup logo renders as animated multi-color `YTBCLI` text pixel art with an entrance reveal and scattered idle shimmer
 
 2. Download screen
 - overall progress bar
 - responsive table with per-item status
+- top status filters (`All`, `Active`, `Completed`, `Failed`, `Queued`)
+- detail panel for the selected row
 - speed and ETA when available
 - add more URLs while running and queue them sequentially
 
@@ -57,25 +62,32 @@ go run . -url "https://www.youtube.com/@SomeChannel/videos" -mode both -output "
 
 Setup screen:
 - `Tab` / `Shift+Tab`: move focus
-- `Up` / `Down`: move focus
-- `Left` / `Right`: change mode when mode selector is focused
+- `Up` / `Down` / `j` / `k`: move focus
+- `Left` / `Right` / `h` / `l`: change mode when mode row is focused
 - `Enter`: next field or start
+- `?`: toggle setup help
 - `q`: quit
 
 Download screen:
 - `a`: open add-link composer
+- `h` / `l`: switch status filter (top bar)
+- `Enter` (main table): open detail for selected row
+- `Esc` / `Enter` (detail panel): close detail
 - `Left` / `Right` (in composer): switch mode for added URL
 - `Enter` (in composer): queue/start the added URL
 - `Esc` (in composer): close composer
 - `Esc` (main download view): cancel current run and return to setup
 - `q` or `Ctrl+C`: quit
 - `Up` / `Down` / `j` / `k`: move selected row
+- `?`: toggle download help
 
 ## Download Behavior
 
 URL handling:
 - single video URLs are detected for `youtu.be`, `/watch?v=`, `/shorts/`, and `/live/`
-- other URLs are treated as channel targets and resolved to channel uploads playlists
+- playlist URLs are detected for `/playlist` and playlist-context `/watch` URLs
+- channel URLs are resolved to channel uploads playlists
+- unsupported URLs are marked as `unknown` in the setup UI
 
 Mode behavior:
 - `audio`: best audio-only stream

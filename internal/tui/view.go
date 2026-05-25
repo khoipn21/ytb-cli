@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -16,92 +15,72 @@ func (m Model) View() string {
 }
 
 func (m Model) setupView() string {
-	termWidth := m.width
-	if termWidth <= 0 {
-		termWidth = 120
+	if m.width > 0 && m.height > 0 && (m.width < 80 || m.height < 24) {
+		return lipgloss.NewStyle().
+			Foreground(lipgloss.Color("3")).
+			Render("Terminal too small. Resize to at least 80x24.")
 	}
-	titleStyle := lipgloss.NewStyle().
+	header := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("230")).
-		Background(lipgloss.Color("25")).
-		Padding(0, 1)
-	subtitleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	titleBlock := lipgloss.JoinVertical(
-		lipgloss.Left,
-		titleStyle.Render("YouTube Downloader"),
-		subtitleStyle.Render("Channel, playlist, or single video URL, pure Go download engine"),
-	)
+		Foreground(lipgloss.Color("15")).
+		Background(lipgloss.Color("4")).
+		Padding(0, 1).
+		Render("YouTube Downloader Setup")
+	subtitle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("7")).
+		Render("Prepare request, then press Enter on Start Download")
+	pixelArt := setupPixelArt(m.setupIntroFrame, m.setupIdleFrame)
 
-	modeText := m.renderModeSelector()
-	startLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("Press Enter on this row to start")
-	startButton := lipgloss.NewStyle().Padding(0, 1).Render("[ Start Download ]")
-	if m.focusIndex == 3 {
-		startButton = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Background(lipgloss.Color("35")).Padding(0, 1).Render("[ Start Download ]")
-	}
-
-	left := []string{
-		titleBlock,
-		"",
-		modeText,
-		"",
-		m.focusLine(1, m.urlInput.View()),
-		m.renderLinkTypeLine(m.urlInput.Value()),
-		m.focusLine(2, m.outputInput.View()),
-		"",
-		m.focusLine(3, startButton),
-		startLabel,
+	formPanel := panelStyle(true).Render(m.renderSetupForm())
+	lines := []string{header, subtitle, pixelArt, formPanel}
+	if m.showHelp {
+		lines = append(lines, panelStyle(false).Render(m.setupHelpTxt))
 	}
 	if strings.TrimSpace(m.errText) != "" {
-		left = append(left, "")
-		left = append(left, lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true).Render("Error: "+m.errText))
+		lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true).Render("Error: "+m.errText))
 	}
-	cardStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		Padding(1, 2)
-	helpStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("238")).
-		Padding(1, 2)
-
-	mainCard := cardStyle.Render(strings.Join(left, "\n"))
-	helpCard := helpStyle.Render(m.setupHelpTxt)
-	return lipgloss.JoinVertical(lipgloss.Left, helpCard, "", mainCard)
+	lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("[tab] next field  [j/k] move  [h/l] mode  [enter] next/start  [?] help  [q] quit"))
+	return strings.Join(lines, "\n")
 }
 
-func (m Model) downloadView() string {
-	mode := strings.ToUpper(string(m.request.Mode))
-	target := "Target: " + short(m.request.TargetURL, 120)
-	failed := 0
-	for _, v := range m.videos {
-		if v.hasError {
-			failed++
-		}
+func (m Model) renderSetupForm() string {
+	startButton := lipgloss.NewStyle().Padding(0, 1).Render("[ Start Download ]")
+	if m.focusIndex == 3 {
+		startButton = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("2")).Padding(0, 1).Render("[ Start Download ]")
 	}
-	progress := fmt.Sprintf("%s %.1f%%", bar(m.overall, 34), m.overall*100)
-	statusLine := fmt.Sprintf("Completed %d/%d   Failed %d   Active %s   Queue %d", m.completed, m.totalVideos, failed, mode, len(m.pending))
-	header := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Background(lipgloss.Color("24")).Padding(0, 1).Render("Download Session")
-	summary := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("239")).
-		Padding(0, 1).
-		Render(strings.Join([]string{target, progress, statusLine}, "\n"))
-	lines := []string{header, summary, "", m.table.View()}
-	if m.addingURL {
-		lines = append(lines, "", m.addURLComposerView())
-	}
-	if strings.TrimSpace(m.lastLog) != "" {
-		lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("Log: "+short(m.lastLog, 140)))
-	}
-	if strings.TrimSpace(m.errText) != "" {
-		lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true).Render("Error: "+short(m.errText, 140)))
-	}
-	if m.addingURL {
-		lines = append(lines, "", lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render("type URL   left/right mode   enter queue/start   esc close composer"))
-	} else {
-		lines = append(lines, "", lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render("↑/↓/j/k move row   a add link   q quit   esc cancel + back to setup"))
+	modeValue := strings.Join([]string{
+		setupModeChip(0, m.modeIndex, "AUDIO", "31"),
+		setupModeChip(1, m.modeIndex, "VIDEO", "127"),
+		setupModeChip(2, m.modeIndex, "BOTH", "64"),
+	}, " ")
+	lines := []string{
+		lipgloss.NewStyle().Bold(true).Render("Form"),
+		"",
+		lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("Field              | Value"),
+		lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("-------------------+--------------------------------------------"),
+		m.setupTableRow(0, "Mode", modeValue),
+		m.setupTableRow(1, "Target URL", m.urlInput.View()),
+		m.setupTableRow(-1, "Detected", renderTargetTypeTag(downloader.DetectTargetType(m.urlInput.Value()))),
+		m.setupTableRow(2, "Output", m.outputInput.View()),
+		m.setupTableRow(3, "Action", startButton),
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (m Model) setupTableRow(index int, field, value string) string {
+	label := lipgloss.NewStyle().Width(18).Render(field)
+	if index == m.focusIndex {
+		label = lipgloss.NewStyle().Width(18).Bold(true).Foreground(lipgloss.Color("15")).Render("► " + field)
+	}
+	return label + " | " + value
+}
+
+func setupModeChip(index, active int, label, color string) string {
+	style := lipgloss.NewStyle().Padding(0, 1).Foreground(lipgloss.Color("248"))
+	if index == active {
+		style = lipgloss.NewStyle().Padding(0, 1).Bold(true).Foreground(lipgloss.Color("230")).Background(lipgloss.Color(color))
+	}
+	return style.Render(label)
 }
 
 func (m Model) renderModeSelector() string {

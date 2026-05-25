@@ -28,8 +28,9 @@ func (m *Model) applyEvent(event downloader.Event) {
 	case downloader.EventVideoStart:
 		index := m.batchStart + event.VideoIndex
 		m.currentIndex = index
-		if index >= 0 {
-			m.table.SetCursor(index)
+		m.refreshTableRows()
+		if visibleIndex := m.findVisibleRowByVideoIndex(index); visibleIndex >= 0 {
+			m.table.SetCursor(visibleIndex)
 		}
 	case downloader.EventVideoProgress:
 		index := m.batchStart + event.VideoIndex
@@ -148,9 +149,10 @@ func setupMarkdown() string {
 
 ## Keys
 
-- Tab / Shift+Tab: move between controls
-- Left / Right: cycle mode
-- Enter: continue
+- Tab / Shift+Tab or j/k: move between controls
+- h / l: cycle mode when mode row is focused
+- Enter: continue / start
+- ?: toggle help panel
 - q: quit
 `
 }
@@ -194,4 +196,13 @@ func short(value string, max int) string {
 		return value[:max]
 	}
 	return value[:max-3] + "..."
+}
+
+func (m Model) findVisibleRowByVideoIndex(videoIndex int) int {
+	for i, idx := range m.visibleRows {
+		if idx == videoIndex {
+			return i
+		}
+	}
+	return -1
 }
