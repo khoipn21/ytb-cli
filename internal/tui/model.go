@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/table"
@@ -33,9 +34,10 @@ type eventMsg struct {
 }
 
 type startDownloadMsg struct {
-	events <-chan downloader.Event
-	cancel context.CancelFunc
-	err    error
+	events  <-chan downloader.Event
+	cancel  context.CancelFunc
+	options downloader.Options
+	err     error
 }
 
 type Model struct {
@@ -50,12 +52,18 @@ type Model struct {
 	setupHelpTxt string
 	urlInput     textinput.Model
 	outputInput  textinput.Model
-	ytDLPInput   textinput.Model
+	addInput     textinput.Model
 	cancel       context.CancelFunc
 	events       <-chan downloader.Event
 	request      downloader.Options
+	pending      []downloader.Options
 	videos       []videoState
 	table        table.Model
+	tableCompact bool
+	addingURL    bool
+	addModeIndex int
+	running      bool
+	batchStart   int
 	totalVideos  int
 	currentIndex int
 	completed    int
@@ -65,7 +73,7 @@ type Model struct {
 func NewModel(config Config) Model {
 	urlInput := newInput("YouTube URL", config.InitialURL, "https://www.youtube.com/@channel/videos or https://youtu.be/...")
 	outputInput := newInput("Output directory", config.InitialOutput, "./downloads")
-	ytDLPInput := newInput("yt-dlp executable", config.InitialYTDLP, "yt-dlp")
+	addInput := newInput("Add URL", "", "Paste channel/video URL then Enter")
 	modeIndex := 0
 	initialMode := strings.ToLower(strings.TrimSpace(config.InitialMode))
 	if initialMode == string(downloader.ModeVideo) {
@@ -78,12 +86,13 @@ func NewModel(config Config) Model {
 		modeIndex:    modeIndex,
 		urlInput:     urlInput,
 		outputInput:  outputInput,
-		ytDLPInput:   ytDLPInput,
+		addInput:     addInput,
 		currentIndex: -1,
 		setupHelpMD:  setupMarkdown(),
 	}
 	m.focusCurrentField()
-	m.setupHelpTxt = renderMarkdown(m.setupHelpMD)
+	m.setupHelpTxt = renderMarkdown(m.setupHelpMD, 52)
+	m.updateSetupDimensions()
 	return m
 }
 
@@ -94,7 +103,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.setupHelpTxt = renderMarkdown(m.setupHelpMD)
+		m.updateSetupDimensions()
 		if m.screen == screenDownload {
 			m.updateTableDimensions()
 			var cmd tea.Cmd
@@ -107,16 +116,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.errText = msg.err.Error()
 			return m, nil
 		}
+		m.request = msg.options
 		m.cancel = msg.cancel
 		m.events = msg.events
 		m.screen = screenDownload
+		m.running = true
 		m.errText = ""
 		return m, waitForEvent(m.events)
 	case eventMsg:
 		if !msg.ok {
+			m.running = false
+			if len(m.pending) > 0 {
+				next := m.pending[0]
+				m.pending = m.pending[1:]
+				m.lastLog = fmt.Sprintf("Starting queued target: %s", short(next.TargetURL, 80))
+				return m, startDownloadCmd(next)
+			}
 			return m, nil
 		}
 		m.applyEvent(msg.event)
+		if msg.event.Type == downloader.EventFinished {
+			m.running = false
+			if len(m.pending) > 0 {
+				next := m.pending[0]
+				m.pending = m.pending[1:]
+				m.lastLog = fmt.Sprintf("Starting queued target: %s", short(next.TargetURL, 80))
+				return m, startDownloadCmd(next)
+			}
+		}
 		return m, waitForEvent(m.events)
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {

@@ -10,7 +10,6 @@ type Config struct {
 	InitialURL    string
 	InitialMode   string
 	InitialOutput string
-	InitialYTDLP  string
 }
 
 func Run(config Config) error {

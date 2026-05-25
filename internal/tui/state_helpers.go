@@ -14,30 +14,38 @@ func (m *Model) applyEvent(event downloader.Event) {
 	case downloader.EventPlaylistReady:
 		m.request.TargetURL = event.RequestURL
 		m.request.Mode = event.Mode
-		m.totalVideos = event.TotalVideos
-		m.videos = make([]videoState, len(event.Videos))
-		for i, v := range event.Videos {
-			m.videos[i] = videoState{video: v}
+		m.batchStart = len(m.videos)
+		m.totalVideos += event.TotalVideos
+		for _, v := range event.Videos {
+			m.videos = append(m.videos, videoState{video: v})
 		}
-		m.initDownloadTable()
+		if m.table.Width() == 0 {
+			m.initDownloadTable()
+		} else {
+			m.updateTableDimensions()
+			m.refreshTableRows()
+		}
 	case downloader.EventVideoStart:
-		m.currentIndex = event.VideoIndex
-		if event.VideoIndex >= 0 {
-			m.table.SetCursor(event.VideoIndex)
+		index := m.batchStart + event.VideoIndex
+		m.currentIndex = index
+		if index >= 0 {
+			m.table.SetCursor(index)
 		}
 	case downloader.EventVideoProgress:
-		if event.VideoIndex < 0 || event.VideoIndex >= len(m.videos) {
+		index := m.batchStart + event.VideoIndex
+		if index < 0 || index >= len(m.videos) {
 			return
 		}
-		item := &m.videos[event.VideoIndex]
+		item := &m.videos[index]
 		item.speed = event.Speed
 		item.eta = event.ETA
 		item.percent = clamp(event.Percent)
 		m.recomputeOverall()
 		m.refreshTableRows()
 	case downloader.EventVideoDone:
-		if event.VideoIndex >= 0 && event.VideoIndex < len(m.videos) {
-			item := &m.videos[event.VideoIndex]
+		index := m.batchStart + event.VideoIndex
+		if index >= 0 && index < len(m.videos) {
+			item := &m.videos[index]
 			item.done = true
 			item.percent = 1.0
 			item.speed = ""
@@ -47,8 +55,9 @@ func (m *Model) applyEvent(event downloader.Event) {
 		m.recomputeOverall()
 		m.refreshTableRows()
 	case downloader.EventVideoError:
-		if event.VideoIndex >= 0 && event.VideoIndex < len(m.videos) {
-			item := &m.videos[event.VideoIndex]
+		index := m.batchStart + event.VideoIndex
+		if index >= 0 && index < len(m.videos) {
+			item := &m.videos[index]
 			item.hasError = true
 			item.errorText = event.Message
 		}
@@ -57,8 +66,9 @@ func (m *Model) applyEvent(event downloader.Event) {
 	case downloader.EventLog:
 		m.lastLog = strings.TrimSpace(event.Message)
 	case downloader.EventFinished:
-		m.overall = 1
-		m.lastLog = fmt.Sprintf("Finished: %d/%d completed", m.completed, m.totalVideos)
+		m.currentIndex = -1
+		m.recomputeOverall()
+		m.lastLog = fmt.Sprintf("Finished batch: %d/%d completed overall", m.completed, m.totalVideos)
 		m.refreshTableRows()
 	}
 }
@@ -66,15 +76,11 @@ func (m *Model) applyEvent(event downloader.Event) {
 func (m *Model) focusCurrentField() {
 	m.urlInput.Blur()
 	m.outputInput.Blur()
-	m.ytDLPInput.Blur()
 	if m.focusIndex == 1 {
 		m.urlInput.Focus()
 	}
 	if m.focusIndex == 2 {
 		m.outputInput.Focus()
-	}
-	if m.focusIndex == 3 {
-		m.ytDLPInput.Focus()
 	}
 }
 
@@ -100,6 +106,38 @@ func newInput(prompt, value, placeholder string) textinput.Model {
 	return input
 }
 
+func (m *Model) updateSetupDimensions() {
+	width := m.width
+	if width <= 0 {
+		width = 120
+	}
+	inputWidth := width - 48
+	if inputWidth < 26 {
+		inputWidth = 26
+	}
+	if inputWidth > 96 {
+		inputWidth = 96
+	}
+	m.urlInput.Width = inputWidth
+	m.outputInput.Width = inputWidth
+	m.addInput.Width = inputWidth
+
+	helpWrap := 52
+	if width < 130 {
+		helpWrap = 48
+	}
+	if width < 110 {
+		helpWrap = 40
+	}
+	if width < 95 {
+		helpWrap = 34
+	}
+	if width < 78 {
+		helpWrap = 30
+	}
+	m.setupHelpTxt = renderMarkdown(m.setupHelpMD, helpWrap)
+}
+
 func setupMarkdown() string {
 	return `
 # YouTube Downloader Setup
@@ -117,8 +155,11 @@ func setupMarkdown() string {
 `
 }
 
-func renderMarkdown(raw string) string {
-	renderer, err := glamour.NewTermRenderer(glamour.WithAutoStyle(), glamour.WithWordWrap(56))
+func renderMarkdown(raw string, wrap int) string {
+	if wrap < 24 {
+		wrap = 24
+	}
+	renderer, err := glamour.NewTermRenderer(glamour.WithAutoStyle(), glamour.WithWordWrap(wrap))
 	if err != nil {
 		return raw
 	}

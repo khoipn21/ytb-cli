@@ -10,19 +10,18 @@ import (
 type Options struct {
 	TargetURL string
 	OutputDir string
-	YTDLPBin  string
 	Mode      DownloadMode
 }
 
 type Service struct {
 	options Options
-	client  *ytDLPClient
+	client  *mediaClient
 }
 
 func NewService(options Options) *Service {
 	return &Service{
 		options: options,
-		client:  newYTDLPClient(options.YTDLPBin),
+		client:  newMediaClient(),
 	}
 }
 
@@ -31,16 +30,6 @@ func (s *Service) Run(ctx context.Context) <-chan Event {
 
 	go func() {
 		defer close(events)
-
-		if err := s.client.validateExecutable(); err != nil {
-			events <- Event{
-				Type:      EventVideoError,
-				Timestamp: time.Now(),
-				Err:       err,
-				Message:   err.Error(),
-			}
-			return
-		}
 
 		mode := normalizeMode(s.options.Mode)
 		videos, err := s.client.fetchTargetVideos(ctx, s.options.TargetURL)
