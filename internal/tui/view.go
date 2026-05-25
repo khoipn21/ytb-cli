@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"youtube-channel-audio-downloader/internal/downloader"
 )
 
 func (m Model) View() string {
@@ -28,7 +29,7 @@ func (m Model) setupView() string {
 	titleBlock := lipgloss.JoinVertical(
 		lipgloss.Left,
 		titleStyle.Render("YouTube Downloader"),
-		subtitleStyle.Render("Channel or single video URL, pure Go download engine"),
+		subtitleStyle.Render("Channel, playlist, or single video URL, pure Go download engine"),
 	)
 
 	modeText := m.renderModeSelector()
@@ -38,7 +39,18 @@ func (m Model) setupView() string {
 		startButton = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Background(lipgloss.Color("35")).Padding(0, 1).Render("[ Start Download ]")
 	}
 
-	left := []string{titleBlock, "", modeText, "", m.focusLine(1, m.urlInput.View()), m.focusLine(2, m.outputInput.View()), "", m.focusLine(3, startButton), startLabel}
+	left := []string{
+		titleBlock,
+		"",
+		modeText,
+		"",
+		m.focusLine(1, m.urlInput.View()),
+		m.renderLinkTypeLine(m.urlInput.Value()),
+		m.focusLine(2, m.outputInput.View()),
+		"",
+		m.focusLine(3, startButton),
+		startLabel,
+	}
 	if strings.TrimSpace(m.errText) != "" {
 		left = append(left, "")
 		left = append(left, lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true).Render("Error: "+m.errText))
@@ -139,10 +151,30 @@ func (m Model) addURLComposerView() string {
 		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("229")).Render("Add URL to Queue"),
 		modeRow,
 		m.addInput.View(),
+		m.renderLinkTypeLine(m.addInput.Value()),
 	}, "\n")
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("240")).
 		Padding(0, 1).
 		Render(body)
+}
+
+func (m Model) renderLinkTypeLine(rawURL string) string {
+	labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243"))
+	return labelStyle.Render("Link Type: ") + renderTargetTypeTag(downloader.DetectTargetType(rawURL))
+}
+
+func renderTargetTypeTag(targetType downloader.TargetType) string {
+	style := lipgloss.NewStyle().Bold(true).Padding(0, 1).Foreground(lipgloss.Color("230"))
+	switch targetType {
+	case downloader.TargetTypeChannel:
+		return style.Background(lipgloss.Color("33")).Render("CHANNEL")
+	case downloader.TargetTypeVideo:
+		return style.Background(lipgloss.Color("99")).Render("VIDEO")
+	case downloader.TargetTypePlaylist:
+		return style.Background(lipgloss.Color("35")).Render("PLAYLIST")
+	default:
+		return style.Background(lipgloss.Color("239")).Render("UNKNOWN")
+	}
 }

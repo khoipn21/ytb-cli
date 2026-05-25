@@ -77,14 +77,14 @@ func (m *Model) updateTableDimensions() {
 	tableHeight := int(math.Max(8, float64(height-13)))
 	m.tableCompact = width < 104
 	if m.tableCompact {
-		remaining := width - 34
+		remaining := width - 42
 		if remaining < 16 {
 			remaining = 16
 		}
 		columns := []table.Column{
 			{Title: "#", Width: 3},
 			{Title: "Mode", Width: 5},
-			{Title: "Status", Width: 10},
+			{Title: "Status", Width: 18},
 			{Title: "Prog", Width: 6},
 			{Title: "Title", Width: remaining},
 		}
@@ -93,14 +93,14 @@ func (m *Model) updateTableDimensions() {
 		m.table.SetWidth(width - 2)
 		return
 	}
-	remaining := width - 52
+	remaining := width - 61
 	if remaining < 24 {
 		remaining = 24
 	}
 	columns := []table.Column{
 		{Title: "#", Width: 4},
 		{Title: "Mode", Width: 6},
-		{Title: "Status", Width: 11},
+		{Title: "Status", Width: 20},
 		{Title: "Progress", Width: 9},
 		{Title: "Speed", Width: 10},
 		{Title: "ETA", Width: 6},
@@ -129,7 +129,7 @@ func renderStatus(status string) string {
 	case "error":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render("error")
 	case "downloading":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Render("running")
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Render("downloading")
 	default:
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("246")).Render("queued")
 	}

@@ -38,7 +38,7 @@ func (s *Service) Run(ctx context.Context) <-chan Event {
 				Type:      EventVideoError,
 				Timestamp: time.Now(),
 				Err:       err,
-				Message:   err.Error(),
+				Message:   userFacingDownloadError(err),
 			}
 			return
 		}
@@ -116,7 +116,7 @@ func (s *Service) Run(ctx context.Context) <-chan Event {
 					ActiveMode: activeMode,
 					VideoIndex: i,
 					Err:        downloadErr,
-					Message:    fmt.Sprintf("failed item %d/%d (%s %s): %v", i+1, totalTasks, task.Title, activeMode, downloadErr),
+					Message:    fmt.Sprintf("failed item %d/%d (%s %s): %s", i+1, totalTasks, task.Title, activeMode, userFacingDownloadError(downloadErr)),
 				}
 				continue
 			}

@@ -143,7 +143,7 @@ func setupMarkdown() string {
 # YouTube Downloader Setup
 
 - Select **mode**: audio, video, or both
-- Paste a **channel URL** or **single video URL**
+- Paste a **channel URL**, **playlist URL**, or **single video URL**
 - Choose output directory, then press **Enter** on Start
 
 ## Keys

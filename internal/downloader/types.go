@@ -16,6 +16,15 @@ const (
 	ModeBoth  DownloadMode = "both"
 )
 
+type TargetType string
+
+const (
+	TargetTypeChannel  TargetType = "channel"
+	TargetTypeVideo    TargetType = "video"
+	TargetTypePlaylist TargetType = "playlist"
+	TargetTypeUnknown  TargetType = "unknown"
+)
+
 type EventType string
 
 const (

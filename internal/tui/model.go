@@ -73,7 +73,7 @@ type Model struct {
 func NewModel(config Config) Model {
 	urlInput := newInput("YouTube URL", config.InitialURL, "https://www.youtube.com/@channel/videos or https://youtu.be/...")
 	outputInput := newInput("Output directory", config.InitialOutput, "./downloads")
-	addInput := newInput("Add URL", "", "Paste channel/video URL then Enter")
+	addInput := newInput("Add URL", "", "Paste channel/video/playlist URL then Enter")
 	modeIndex := 0
 	initialMode := strings.ToLower(strings.TrimSpace(config.InitialMode))
 	if initialMode == string(downloader.ModeVideo) {

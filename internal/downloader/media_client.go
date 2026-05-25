@@ -41,12 +41,15 @@ func newMediaClient() *mediaClient {
 }
 
 func (c *mediaClient) fetchTargetVideos(ctx context.Context, targetURL string) ([]Video, error) {
-	if looksLikeSingleVideoURL(targetURL) {
+	switch DetectTargetType(targetURL) {
+	case TargetTypeVideo:
 		video, err := c.client.GetVideoContext(ctx, targetURL)
 		if err != nil {
 			return nil, fmt.Errorf("load single video: %w", err)
 		}
 		return []Video{{ID: video.ID, Title: video.Title, URL: targetURL}}, nil
+	case TargetTypePlaylist:
+		return c.fetchPlaylistVideos(ctx, targetURL)
 	}
 	channelID, err := c.resolveChannelID(ctx, targetURL)
 	if err != nil {
